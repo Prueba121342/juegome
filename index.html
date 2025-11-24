@@ -1,0 +1,894 @@
+<!DOCTYPE html>
+<html lang="es">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Guardianes de Chepén: Edición Definitiva</title>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.2/gsap.min.js"></script>
+    <link
+        href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;700;900&family=Montserrat:wght@300;400;600&display=swap"
+        rel="stylesheet">
+
+    <style>
+        :root {
+            --gold: #ffd700;
+            --gold-dim: #b8860b;
+            --dark-bg: #0a0a0c;
+            --glass: rgba(20, 20, 25, 0.85);
+            --glass-border: 1px solid rgba(255, 255, 255, 0.1);
+            --p1-color: #e74c3c;
+            --p2-color: #9b59b6;
+            --p3-color: #3498db;
+            --p4-color: #2ecc71;
+        }
+
+        * {
+            box-sizing: border-box;
+            user-select: none;
+        }
+
+        body {
+            margin: 0;
+            overflow: hidden;
+            background: #000;
+            font-family: 'Montserrat', sans-serif;
+            color: white;
+        }
+
+        /* --- UI LAYER --- */
+        #ui-layer {
+            position: absolute;
+            inset: 0;
+            pointer-events: none;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            z-index: 10;
+        }
+
+        /* TOP BAR */
+        .top-hud {
+            background: linear-gradient(180deg, rgba(0, 0, 0, 0.9) 0%, transparent 100%);
+            padding: 20px;
+            display: flex;
+            justify-content: center;
+            gap: 20px;
+            pointer-events: auto;
+            perspective: 1000px;
+        }
+
+        .player-badge {
+            background: var(--glass);
+            border: var(--glass-border);
+            padding: 10px 20px;
+            border-radius: 15px;
+            min-width: 120px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            transition: 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+            opacity: 0.6;
+            transform: scale(0.9) rotateX(10deg);
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.5);
+        }
+
+        .player-badge.active {
+            opacity: 1;
+            transform: scale(1.05) rotateX(0deg);
+            border-color: var(--gold);
+            box-shadow: 0 0 20px rgba(255, 215, 0, 0.2);
+            background: linear-gradient(145deg, rgba(50, 50, 50, 0.9), rgba(20, 20, 20, 0.9));
+        }
+
+        .pb-avatar {
+            width: 45px;
+            height: 45px;
+            border-radius: 50%;
+            border: 2px solid white;
+            margin-bottom: 5px;
+            background-size: cover;
+            background-position: center;
+            box-shadow: 0 0 10px rgba(255, 255, 255, 0.2);
+        }
+
+        .pb-name {
+            font-family: 'Cinzel', serif;
+            font-weight: 700;
+            color: var(--gold);
+            font-size: 0.9rem;
+        }
+
+        .pb-score {
+            font-size: 0.8rem;
+            font-weight: 600;
+            color: #ccc;
+        }
+
+        /* CENTER NOTIFICATIONS (Monopoly Cards) */
+        #center-stage {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 400px;
+            pointer-events: auto;
+            perspective: 1000px;
+            z-index: 100;
+        }
+
+        .game-card {
+            background: #f4f1ea;
+            color: #2c3e50;
+            border-radius: 8px;
+            overflow: hidden;
+            box-shadow: 0 25px 50px rgba(0, 0, 0, 0.8), 0 0 0 1px rgba(0, 0, 0, 0.5);
+            transform-origin: center;
+            display: none;
+            animation: cardFlipIn 0.8s cubic-bezier(0.68, -0.55, 0.265, 1.55);
+        }
+
+        @keyframes cardFlipIn {
+            from {
+                transform: translateY(100px) rotateY(90deg) scale(0.5);
+                opacity: 0;
+            }
+
+            to {
+                transform: translateY(0) rotateY(0) scale(1);
+                opacity: 1;
+            }
+        }
+
+        .gc-header {
+            padding: 20px;
+            text-align: center;
+            color: white;
+            font-family: 'Cinzel', serif;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .gc-header::after {
+            content: '';
+            position: absolute;
+            inset: 0;
+            background: linear-gradient(45deg, transparent 40%, rgba(255, 255, 255, 0.2) 50%, transparent 60%);
+        }
+
+        .type-event {
+            background: #8e44ad;
+        }
+
+        .type-trap {
+            background: #c0392b;
+        }
+
+        .type-good {
+            background: #27ae60;
+        }
+
+        .type-info {
+            background: #2980b9;
+        }
+
+        .gc-body {
+            padding: 25px;
+            text-align: center;
+            font-size: 1rem;
+            line-height: 1.6;
+        }
+
+        .gc-actions {
+            padding: 0 25px 25px;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        .btn-action {
+            padding: 12px;
+            background: white;
+            border: 2px solid #ddd;
+            border-radius: 6px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: 0.2s;
+            font-family: 'Montserrat', sans-serif;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .btn-action:hover {
+            background: #2c3e50;
+            color: var(--gold);
+            border-color: #2c3e50;
+            transform: translateX(5px);
+        }
+
+        /* BOTTOM DASHBOARD (Fixed, Sleek) */
+        .dashboard {
+            background: rgba(10, 10, 10, 0.95);
+            border-top: 1px solid var(--gold-dim);
+            padding: 20px 40px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            pointer-events: auto;
+            box-shadow: 0 -10px 30px rgba(0, 0, 0, 0.5);
+        }
+
+        .info-panel {
+            font-family: 'Cinzel', serif;
+        }
+
+        .info-title {
+            font-size: 1.5rem;
+            color: white;
+            margin-bottom: 5px;
+            text-shadow: 0 0 10px rgba(255, 255, 255, 0.3);
+        }
+
+        .info-sub {
+            color: #888;
+            font-size: 0.9rem;
+        }
+
+        .controls {
+            display: flex;
+            align-items: center;
+            gap: 30px;
+        }
+
+        .dice-box {
+            width: 60px;
+            height: 60px;
+            background: #fff;
+            border-radius: 12px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-size: 2rem;
+            font-weight: 900;
+            color: #000;
+            box-shadow: inset 0 0 10px rgba(0, 0, 0, 0.3);
+            border: 4px solid var(--gold);
+        }
+
+        .btn-roll {
+            background: linear-gradient(135deg, var(--gold), #d35400);
+            border: none;
+            padding: 15px 50px;
+            border-radius: 40px;
+            font-family: 'Cinzel', serif;
+            font-size: 1.2rem;
+            font-weight: bold;
+            color: white;
+            cursor: pointer;
+            box-shadow: 0 0 20px rgba(211, 84, 0, 0.4);
+            transition: 0.3s;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        .btn-roll:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 0 30px rgba(211, 84, 0, 0.7);
+        }
+
+        .btn-roll:disabled {
+            background: #444;
+            color: #888;
+            cursor: not-allowed;
+            transform: none;
+            box-shadow: none;
+        }
+
+        /* Floating text for damage/points */
+        .floater {
+            position: absolute;
+            font-weight: bold;
+            pointer-events: none;
+            animation: floatUp 2s forwards;
+            text-shadow: 0 2px 4px black;
+        }
+
+        @keyframes floatUp {
+            0% {
+                opacity: 1;
+                transform: translateY(0) scale(1);
+            }
+
+            100% {
+                opacity: 0;
+                transform: translateY(-50px) scale(1.5);
+            }
+        }
+    </style>
+</head>
+
+<body>
+
+    <div id="ui-layer">
+        <div class="top-hud" id="hud-players">
+        </div>
+
+        <div id="center-stage">
+            <div id="active-card" class="game-card">
+                <div class="gc-header type-info" id="card-header">Título</div>
+                <div class="gc-body" id="card-body">Descripción...</div>
+                <div class="gc-actions" id="card-actions"></div>
+            </div>
+        </div>
+
+        <div class="dashboard">
+            <div class="info-panel">
+                <div class="info-title" id="status-main">Turno de Leo</div>
+                <div class="info-sub" id="status-sub">Esperando lanzamiento...</div>
+            </div>
+            <div class="controls">
+                <div class="dice-box" id="dice-val">🎲</div>
+                <button class="btn-roll" id="btn-roll" onclick="Game.rollDice()">Lanzar</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="canvas-wrapper"></div>
+
+    <script>
+        /**
+         * ------------------------------------------------------------------
+         * MODULE 1: PROCEDURAL TEXTURE GENERATOR
+         * Creates assets in memory to avoid 404s and loading times.
+         * ------------------------------------------------------------------
+         */
+        const TextureFactory = {
+            createCanvas(w, h) {
+                const c = document.createElement('canvas'); c.width = w; c.height = h; return c;
+            },
+
+            getWood() {
+                const c = this.createCanvas(512, 512); const ctx = c.getContext('2d');
+                ctx.fillStyle = '#5d4037'; ctx.fillRect(0, 0, 512, 512);
+                for (let i = 0; i < 50; i++) {
+                    ctx.strokeStyle = `rgba(0,0,0,${Math.random() * 0.3})`;
+                    ctx.lineWidth = Math.random() * 5;
+                    ctx.beginPath(); ctx.moveTo(0, Math.random() * 512); ctx.bezierCurveTo(100, Math.random() * 512, 400, Math.random() * 512, 512, Math.random() * 512); ctx.stroke();
+                }
+                return new THREE.CanvasTexture(c);
+            },
+
+            getMarble(colorHex = '#ecf0f1') {
+                const c = this.createCanvas(512, 512); const ctx = c.getContext('2d');
+                ctx.fillStyle = colorHex; ctx.fillRect(0, 0, 512, 512);
+                // Veins
+                for (let i = 0; i < 20; i++) {
+                    ctx.strokeStyle = 'rgba(0,0,0,0.1)'; ctx.lineWidth = 2 + Math.random() * 3;
+                    ctx.beginPath(); ctx.moveTo(Math.random() * 512, Math.random() * 512);
+                    ctx.lineTo(Math.random() * 512, Math.random() * 512); ctx.stroke();
+                }
+                return new THREE.CanvasTexture(c);
+            },
+
+            getGold() {
+                const c = this.createCanvas(128, 128); const ctx = c.getContext('2d');
+                const grd = ctx.createLinearGradient(0, 0, 128, 128);
+                grd.addColorStop(0, "#f1c40f"); grd.addColorStop(0.5, "#fcf3cf"); grd.addColorStop(1, "#b7950b");
+                ctx.fillStyle = grd; ctx.fillRect(0, 0, 128, 128);
+                return new THREE.CanvasTexture(c);
+            },
+
+            getTileLabel(number) {
+                const c = this.createCanvas(128, 128); const ctx = c.getContext('2d');
+                ctx.fillStyle = 'rgba(0,0,0,0.5)'; ctx.beginPath(); ctx.arc(64, 64, 40, 0, Math.PI * 2); ctx.fill();
+                ctx.strokeStyle = '#d4af37'; ctx.lineWidth = 4; ctx.stroke();
+                ctx.fillStyle = '#fff'; ctx.font = 'bold 40px Cinzel'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+                ctx.fillText(number, 64, 64);
+                return new THREE.CanvasTexture(c);
+            }
+        };
+
+        /**
+         * ------------------------------------------------------------------
+         * MODULE 2: GRAPHICS ENGINE (Three.js Wrapper)
+         * Handles Scene, Camera, Lights, and Render Loop.
+         * ------------------------------------------------------------------
+         */
+        const Graphics = {
+            scene: null, camera: null, renderer: null, controls: null,
+            mixers: [], clock: new THREE.Clock(),
+
+            init() {
+                this.scene = new THREE.Scene();
+                this.scene.background = new THREE.Color(0x050505);
+                this.scene.fog = new THREE.FogExp2(0x050505, 0.012);
+
+                this.camera = new THREE.PerspectiveCamera(50, window.innerWidth / window.innerHeight, 0.1, 1000);
+                this.camera.position.set(0, 60, 80);
+
+                this.renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: "high-performance" });
+                this.renderer.setSize(window.innerWidth, window.innerHeight);
+                this.renderer.shadowMap.enabled = true;
+                this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+                document.getElementById('canvas-wrapper').appendChild(this.renderer.domElement);
+
+                // Lighting
+                const amb = new THREE.AmbientLight(0xffffff, 0.4);
+                this.scene.add(amb);
+
+                const sun = new THREE.DirectionalLight(0xffd5a1, 1.2);
+                sun.position.set(-30, 80, -30);
+                sun.castShadow = true;
+                sun.shadow.mapSize.set(2048, 2048);
+                this.scene.add(sun);
+
+                // Spot for drama
+                this.spot = new THREE.SpotLight(0x3498db, 2);
+                this.spot.position.set(0, 50, 0);
+                this.spot.angle = Math.PI / 6;
+                this.spot.penumbra = 0.5;
+                this.scene.add(this.spot);
+                this.spotTarget = new THREE.Object3D();
+                this.scene.add(this.spotTarget);
+                this.spot.target = this.spotTarget;
+
+                this.controls = new THREE.OrbitControls(this.camera, this.renderer.domElement);
+                this.controls.enableDamping = true;
+                this.controls.maxPolarAngle = Math.PI / 2.1;
+                this.controls.minDistance = 20; this.controls.maxDistance = 120;
+
+                window.addEventListener('resize', () => {
+                    this.camera.aspect = window.innerWidth / window.innerHeight;
+                    this.camera.updateProjectionMatrix();
+                    this.renderer.setSize(window.innerWidth, window.innerHeight);
+                });
+
+                this.createEnvironment();
+                this.render();
+            },
+
+            createEnvironment() {
+                // Table
+                const tGeo = new THREE.BoxGeometry(140, 2, 100);
+                const tMat = new THREE.MeshStandardMaterial({ map: TextureFactory.getWood(), roughness: 0.8 });
+                const table = new THREE.Mesh(tGeo, tMat);
+                table.position.y = -1.5; table.receiveShadow = true;
+                this.scene.add(table);
+
+                // Particles (Neblina)
+                const pGeo = new THREE.BufferGeometry();
+                const count = 1500;
+                const pos = new Float32Array(count * 3);
+                for (let i = 0; i < count * 3; i++) {
+                    pos[i] = (Math.random() - 0.5) * 200;
+                    if (i % 3 === 1) pos[i] = Math.random() * 15; // Y height
+                }
+                pGeo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+                const pMat = new THREE.PointsMaterial({ color: 0x888888, size: 0.8, transparent: true, opacity: 0.4 });
+                this.cloudSystem = new THREE.Points(pGeo, pMat);
+                this.scene.add(this.cloudSystem);
+            },
+
+            render() {
+                requestAnimationFrame(() => this.render());
+                const dt = this.clock.getDelta();
+                this.controls.update();
+
+                if (this.cloudSystem) {
+                    this.cloudSystem.rotation.y += 0.0005;
+                    this.cloudSystem.position.y = Math.sin(Date.now() * 0.0005) * 2;
+                }
+
+                this.renderer.render(this.scene, this.camera);
+            }
+        };
+
+        /**
+         * ------------------------------------------------------------------
+         * MODULE 3: CAMERA DIRECTOR
+         * Manages smooth transitions between game states.
+         * ------------------------------------------------------------------
+         */
+        const CameraDirector = {
+            followTarget: null,
+            mode: 'ORBIT', // ORBIT, FOLLOW, ACTION
+
+            focusOn(vector3, zoom = false) {
+                const offset = zoom ? { y: 15, z: 15 } : { y: 40, z: 40 };
+
+                gsap.to(Graphics.controls.target, {
+                    x: vector3.x, y: 0, z: vector3.z,
+                    duration: 1.5, ease: "power2.inOut"
+                });
+
+                gsap.to(Graphics.camera.position, {
+                    x: vector3.x, y: offset.y, z: vector3.z + offset.z,
+                    duration: 1.5, ease: "power2.inOut"
+                });
+            },
+
+            track(mesh) {
+                this.mode = 'FOLLOW';
+                this.followTarget = mesh;
+                // Simple update loop hook could be added here for rigid following
+            }
+        };
+
+        /**
+         * ------------------------------------------------------------------
+         * MODULE 4: BOARD ARCHITECT
+         * Generates the tiles, path, and visual props.
+         * ------------------------------------------------------------------
+         */
+        const Board = {
+            tiles: [],
+            pathPoints: [],
+
+            build(scene) {
+                // Define Path (Spiral/Snake)
+                const points = [
+                    new THREE.Vector3(-40, 0, -30), new THREE.Vector3(0, 0, -30), new THREE.Vector3(40, 0, -30),
+                    new THREE.Vector3(40, 0, 0), new THREE.Vector3(0, 0, 0), new THREE.Vector3(-40, 0, 0),
+                    new THREE.Vector3(-40, 0, 30), new THREE.Vector3(0, 0, 30), new THREE.Vector3(40, 0, 30)
+                ];
+
+                // Interpolate for smooth positions
+                const curve = new THREE.CatmullRomCurve3(points);
+                const count = 30; // Total tiles
+
+                for (let i = 0; i < count; i++) {
+                    const t = i / (count - 1);
+                    const pos = curve.getPoint(t);
+                    this.createTile(scene, pos, i);
+                    this.tiles.push({ pos: pos, type: this.getTileType(i), index: i });
+                }
+
+                // Path Line Visual
+                const lineGeo = new THREE.TubeGeometry(curve, 100, 0.2, 8, false);
+                const lineMat = new THREE.MeshBasicMaterial({ color: 0xb7950b, transparent: true, opacity: 0.5 });
+                scene.add(new THREE.Mesh(lineGeo, lineMat));
+            },
+
+            getTileType(i) {
+                if (i === 0) return 'START';
+                if (i === 29) return 'END';
+                if (i % 5 === 0) return 'EVENT';
+                if (i % 7 === 0) return 'TRAP';
+                if (i % 4 === 0) return 'GOOD';
+                return 'NORMAL';
+            },
+
+            createTile(scene, pos, index) {
+                const size = 6;
+                const type = this.getTileType(index);
+
+                // Base
+                const geo = new THREE.BoxGeometry(size, 1, size);
+                let mat = new THREE.MeshStandardMaterial({ map: TextureFactory.getMarble('#bdc3c7'), roughness: 0.5 });
+
+                // Colors/Materials based on type
+                if (type === 'EVENT') mat.color.setHex(0x9b59b6);
+                if (type === 'TRAP') mat.color.setHex(0xc0392b);
+                if (type === 'GOOD') mat.color.setHex(0x27ae60);
+                if (type === 'START') mat.color.setHex(0xf1c40f);
+
+                const mesh = new THREE.Mesh(geo, mat);
+                mesh.position.copy(pos);
+                mesh.position.y = 0;
+                mesh.receiveShadow = true;
+
+                // Bevel/Border
+                const border = new THREE.Mesh(
+                    new THREE.BoxGeometry(size + 0.2, 0.8, size + 0.2),
+                    new THREE.MeshStandardMaterial({ color: 0x2c3e50 })
+                );
+                border.position.y = -0.1;
+                mesh.add(border);
+
+                // Label
+                const label = new THREE.Mesh(new THREE.PlaneGeometry(4, 4), new THREE.MeshBasicMaterial({ map: TextureFactory.getTileLabel(index + 1), transparent: true }));
+                label.rotation.x = -Math.PI / 2; label.position.y = 0.55;
+                mesh.add(label);
+
+                // Props (Decor)
+                if (type === 'EVENT') this.addProp(mesh, 'chest');
+                if (type === 'TRAP') this.addProp(mesh, 'skull');
+
+                scene.add(mesh);
+            },
+
+            addProp(parent, type) {
+                const grp = new THREE.Group();
+                if (type === 'chest') {
+                    const chest = new THREE.Mesh(new THREE.BoxGeometry(2, 1.5, 1.5), new THREE.MeshStandardMaterial({ color: 0x8e44ad }));
+                    chest.position.y = 1; grp.add(chest);
+                } else if (type === 'skull') {
+                    const skull = new THREE.Mesh(new THREE.DodecahedronGeometry(0.8), new THREE.MeshStandardMaterial({ color: 0xbdc3c7 }));
+                    skull.position.y = 1; grp.add(skull);
+                }
+                parent.add(grp);
+
+                // Float animation
+                gsap.to(grp.position, { y: 1.5, duration: 1, yoyo: true, repeat: -1, ease: "sine.inOut" });
+                gsap.to(grp.rotation, { y: Math.PI, duration: 2, repeat: -1, ease: "linear" });
+            }
+        };
+
+        /**
+         * ------------------------------------------------------------------
+         * MODULE 5: PLAYER FACTORY
+         * Creates styled pawns.
+         * ------------------------------------------------------------------
+         */
+        class Player {
+            constructor(data, startPos) {
+                this.id = data.id;
+                this.name = data.name;
+                this.color = data.color;
+                this.avatar = data.av;
+                this.currentTile = 0;
+                this.score = 0;
+
+                this.mesh = this.createMesh();
+                this.mesh.position.copy(startPos);
+                // Random offset
+                this.mesh.position.x += (Math.random() - 0.5) * 2;
+                this.mesh.position.z += (Math.random() - 0.5) * 2;
+                Graphics.scene.add(this.mesh);
+            }
+
+            createMesh() {
+                const g = new THREE.Group();
+
+                // Base
+                const base = new THREE.Mesh(new THREE.CylinderGeometry(1.5, 1.8, 0.5, 32), new THREE.MeshStandardMaterial({ color: 0x222 }));
+                base.position.y = 0.25; g.add(base);
+
+                // Body
+                const body = new THREE.Mesh(new THREE.CylinderGeometry(0.5, 1.2, 2.5, 8), new THREE.MeshStandardMaterial({ color: this.color, roughness: 0.3, metalness: 0.2 }));
+                body.position.y = 1.75; body.castShadow = true; g.add(body);
+
+                // Head
+                const head = new THREE.Mesh(new THREE.SphereGeometry(1, 16, 16), new THREE.MeshStandardMaterial({ color: 0xffdbac }));
+                head.position.y = 3.5; head.castShadow = true; g.add(head);
+
+                // Halo (Active marker)
+                const ring = new THREE.Mesh(new THREE.TorusGeometry(2, 0.1, 8, 32), new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0 }));
+                ring.rotation.x = Math.PI / 2; ring.position.y = 0.1;
+                ring.name = "halo";
+                g.add(ring);
+
+                return g;
+            }
+
+            setActive(isActive) {
+                const halo = this.mesh.getObjectByName("halo");
+                if (isActive) {
+                    gsap.to(halo.material, { opacity: 1 });
+                    gsap.to(this.mesh.scale, { x: 1.2, y: 1.2, z: 1.2, duration: 0.3 });
+                } else {
+                    gsap.to(halo.material, { opacity: 0 });
+                    gsap.to(this.mesh.scale, { x: 1, y: 1, z: 1, duration: 0.3 });
+                }
+            }
+        }
+
+        /**
+         * ------------------------------------------------------------------
+         * MODULE 6: GAME LOGIC & UI INTERACTION
+         * The brain.
+         * ------------------------------------------------------------------
+         */
+        const Game = {
+            players: [],
+            turn: 0,
+            isLocked: false,
+
+            init() {
+                Graphics.init();
+                Board.build(Graphics.scene);
+
+                const pData = [
+                    { id: 0, name: "Leo", av: "https://api.dicebear.com/7.x/avataaars/svg?seed=Leo", color: 0xe74c3c },
+                    { id: 1, name: "Sofía", av: "https://api.dicebear.com/7.x/avataaars/svg?seed=Sofia", color: 0x9b59b6 },
+                    { id: 2, name: "Marco", av: "https://api.dicebear.com/7.x/avataaars/svg?seed=Marco", color: 0x3498db },
+                    { id: 3, name: "Ana", av: "https://api.dicebear.com/7.x/avataaars/svg?seed=Ana", color: 0x2ecc71 }
+                ];
+
+                const startPos = Board.tiles[0].pos;
+                pData.forEach(d => {
+                    this.players.push(new Player(d, startPos));
+                });
+
+                this.setupUI();
+                this.startTurn();
+            },
+
+            setupUI() {
+                const hud = document.getElementById('hud-players');
+                this.players.forEach(p => {
+                    const el = document.createElement('div');
+                    el.className = 'player-badge'; el.id = `badge-${p.id}`;
+                    el.innerHTML = `
+                        <div class="pb-avatar" style="background-image:url('${p.avatar}')"></div>
+                        <div class="pb-name">${p.name}</div>
+                        <div class="pb-score" id="score-${p.id}">0 XP</div>
+                    `;
+                    hud.appendChild(el);
+                });
+            },
+
+            updateStatus(main, sub) {
+                document.getElementById('status-main').innerText = main;
+                document.getElementById('status-sub').innerText = sub;
+            },
+
+            startTurn() {
+                this.isLocked = false;
+                const p = this.players[this.turn];
+
+                // Visuals
+                this.players.forEach(pl => pl.setActive(pl === p));
+                document.querySelectorAll('.player-badge').forEach(b => b.classList.remove('active'));
+                document.getElementById(`badge-${p.id}`).classList.add('active');
+
+                document.getElementById('btn-roll').disabled = false;
+                this.updateStatus(`Turno de ${p.name}`, "Toca 'Lanzar' para moverte");
+
+                // Camera Focus
+                CameraDirector.focusOn(p.mesh.position);
+                Graphics.spotTarget.position.copy(p.mesh.position);
+            },
+
+            async rollDice() {
+                if (this.isLocked) return;
+                this.isLocked = true;
+                document.getElementById('btn-roll').disabled = true;
+
+                const diceEl = document.getElementById('dice-val');
+
+                // Animation
+                let roll = 0;
+                for (let i = 0; i < 15; i++) {
+                    roll = Math.floor(Math.random() * 6) + 1;
+                    diceEl.innerText = roll;
+                    await new Promise(r => setTimeout(r, 80));
+                }
+
+                this.updateStatus(`${this.players[this.turn].name} sacó un ${roll}`, "Moviendo...");
+                await this.movePlayer(this.players[this.turn], roll);
+            },
+
+            async movePlayer(player, steps) {
+                let current = player.currentTile;
+                let target = Math.min(current + steps, Board.tiles.length - 1);
+
+                // Hop animation loop
+                for (let i = current + 1; i <= target; i++) {
+                    const pos = Board.tiles[i].pos;
+
+                    // Look
+                    player.mesh.lookAt(pos.x, player.mesh.position.y, pos.z);
+
+                    // Spotlight follow
+                    gsap.to(Graphics.spotTarget.position, { x: pos.x, z: pos.z, duration: 0.5 });
+                    CameraDirector.focusOn(pos); // Smooth track
+
+                    // Jump
+                    await new Promise(resolve => {
+                        const tl = gsap.timeline({ onComplete: resolve });
+                        tl.to(player.mesh.position, {
+                            x: pos.x, z: pos.z,
+                            duration: 0.5, ease: "linear"
+                        }, 0);
+                        tl.to(player.mesh.position, {
+                            y: 3, duration: 0.25, yoyo: true, repeat: 1, ease: "power1.out"
+                        }, 0);
+                    });
+                }
+
+                player.currentTile = target;
+
+                // Landed Effect
+                this.processTile(player, Board.tiles[target]);
+            },
+
+            processTile(player, tile) {
+                const type = tile.type;
+                CameraDirector.focusOn(player.mesh.position, true); // Zoom in
+
+                let title = "", desc = "", btnTxt = "Continuar";
+                let typeClass = "type-info";
+                let action = () => this.nextTurn();
+
+                if (type === 'EVENT') {
+                    title = "Misterio de la Niebla";
+                    desc = "Has encontrado un objeto antiguo oculto entre las rocas de Chepén. ¿Deseas examinarlo?";
+                    typeClass = "type-event";
+                    action = () => {
+                        this.addScore(player, 50);
+                        this.nextTurn();
+                    }
+                } else if (type === 'TRAP') {
+                    title = "Camino Bloqueado";
+                    desc = "La neblina se espesa y pierdes la orientación. Pierdes puntos de experiencia.";
+                    typeClass = "type-trap";
+                    action = () => {
+                        this.addScore(player, -20);
+                        this.nextTurn();
+                    }
+                } else if (type === 'GOOD') {
+                    title = "Bendición Local";
+                    desc = "Los lugareños te ofrecen comida y descanso. Recuperas fuerzas.";
+                    typeClass = "type-good";
+                    action = () => {
+                        this.addScore(player, 30);
+                        this.nextTurn();
+                    }
+                } else if (type === 'START') {
+                    this.nextTurn(); return;
+                } else {
+                    // Normal tile
+                    setTimeout(() => this.nextTurn(), 1000);
+                    return;
+                }
+
+                this.showCard(title, desc, typeClass, "Aceptar", action);
+            },
+
+            addScore(player, amount) {
+                player.score += amount;
+                document.getElementById(`score-${player.id}`).innerText = `${player.score} XP`;
+
+                // Floating Text
+                const float = document.createElement('div');
+                float.className = 'floater';
+                float.style.left = '50%'; float.style.top = '40%';
+                float.style.color = amount > 0 ? '#2ecc71' : '#e74c3c';
+                float.innerText = amount > 0 ? `+${amount}` : amount;
+                document.body.appendChild(float);
+                setTimeout(() => float.remove(), 2000);
+            },
+
+            showCard(title, desc, typeClass, btnText, callback) {
+                const card = document.getElementById('active-card');
+                const header = document.getElementById('card-header');
+                const body = document.getElementById('card-body');
+                const actions = document.getElementById('card-actions');
+
+                header.className = `gc-header ${typeClass}`;
+                header.innerText = title;
+                body.innerText = desc;
+                actions.innerHTML = '';
+
+                const btn = document.createElement('button');
+                btn.className = 'btn-action';
+                btn.innerText = btnText;
+                btn.onclick = () => {
+                    card.style.display = 'none';
+                    callback();
+                };
+                actions.appendChild(btn);
+
+                card.style.display = 'block';
+            },
+
+            nextTurn() {
+                document.getElementById('active-card').style.display = 'none';
+                this.turn = (this.turn + 1) % this.players.length;
+                this.startTurn();
+            }
+        };
+
+        // Start Game
+        window.onload = () => Game.init();
+
+    </script>
+</body>
+
+</html>
